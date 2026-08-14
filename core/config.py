@@ -47,6 +47,12 @@ OSM_USER_AGENT = "LeadGenTool/1.0 (local lead research tool)"
 # Lower than Google's assumption - OSM's volunteer-mapped tagging is
 # generally sparser for small local businesses, especially outside the US/AU.
 OSM_AVG_RESULTS_PER_QUERY = 6
+# Overpass's shared public instance returns 502/503/504 fairly often under
+# load, especially for broad name-regex queries (categories with no clean
+# tag mapping) over large-population cities. These are almost always
+# transient - retry with backoff rather than giving up after one 504.
+OSM_OVERPASS_MAX_RETRIES = 3
+OSM_OVERPASS_RETRY_BACKOFF_SECONDS = 3
 
 # --- IndiaMART (free public category pages, India-only, product-keyword search) ---
 # One page load returns ~20-30 suppliers total across whatever cities are

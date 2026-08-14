@@ -46,17 +46,19 @@
 </head>
 <body>
 <div class="container">
-  <div class="topnav"><a href="/leads">Open Leads Dashboard →</a></div>
+  <div class="topnav">
+    <a href="/indiamart">IndiaMART Supplier Finder →</a>
+    <a href="/leads">Open Leads Dashboard →</a>
+  </div>
 
   <div class="card">
     <h1>Lead Generator</h1>
-    <p class="sub">Scrapes Google Places and/or OpenStreetMap (free) across the categories and cities you pick, guesses emails from company websites, and saves to a local database (dedup'd across runs).</p>
+    <p class="sub">Scrapes Google Places and/or OpenStreetMap (free) across the categories and cities you pick, guesses emails from company websites, and saves to a local database (dedup'd across runs). Looking for IndiaMART wholesale suppliers instead? <a href="/indiamart">Use the dedicated IndiaMART page →</a></p>
 
     <h2>1. Data source</h2>
     <div class="check-grid" id="source-checks">
       <label class="check-row"><input type="checkbox" class="source-check" value="google" checked> Google Places <span style="color:#64748b; font-weight:400;">(ratings/reviews included, costs money past the free monthly quota)</span></label>
       <label class="check-row"><input type="checkbox" class="source-check" value="osm"> OpenStreetMap <span style="color:#64748b; font-weight:400;">(free, no quota, no ratings/reviews, coverage varies by region)</span></label>
-      <label class="check-row"><input type="checkbox" class="source-check" value="indiamart"> IndiaMART <span style="color:#64748b; font-weight:400;">(free, India-only wholesale/manufacturing suppliers by product keyword — not business type. No phone numbers; needs Playwright installed.)</span></label>
     </div>
 
     <h2>2. Who are you targeting?</h2>
@@ -76,7 +78,6 @@
 
     <label>Extra custom categories (one per line, added on top)</label>
     <textarea id="custom_categories" rows="2" placeholder="e.g. Wedding planner"></textarea>
-    <p class="sub" id="indiamart-category-note" style="display:none; margin-top:6px;">IndiaMART searches by <strong>product keyword</strong>, not business type — put product names here instead (e.g. "stainless steel wire", "cotton yarn"). Business-type categories like "Electrician" will return nothing on IndiaMART.</p>
 
     <h2>3. Where?</h2>
     <p class="sub" style="margin-bottom:10px;">Check a country to select all its cities, or expand it to pick specific ones.</p>
@@ -100,7 +101,7 @@
     <textarea id="custom_locations" rows="2"></textarea>
 
     <h2>4. How many leads?</h2>
-    <label>Max leads for this run <span style="font-weight:400; color:#64748b;">(Google Places only — OpenStreetMap and IndiaMART are free and always collect everything found)</span></label>
+    <label>Max leads for this run <span style="font-weight:400; color:#64748b;">(applies per source — e.g. 100 selected with both Google and OpenStreetMap on means up to 100 from each)</span></label>
     <select id="max_leads">
       <option value="50">50</option>
       <option value="100" selected>100</option>
@@ -242,12 +243,6 @@
   document.getElementById('custom_categories').addEventListener('input', scheduleEstimate);
   document.getElementById('custom_locations').addEventListener('input', scheduleEstimate);
   document.getElementById('max_leads').addEventListener('change', scheduleEstimate);
-
-  function updateIndiamartNote() {
-    const checked = document.querySelector('.source-check[value="indiamart"]').checked;
-    document.getElementById('indiamart-category-note').style.display = checked ? 'block' : 'none';
-  }
-  document.querySelector('.source-check[value="indiamart"]').addEventListener('change', updateIndiamartNote);
 
   let polling = null;
   async function startScraping() {

@@ -27,6 +27,7 @@ some workaround.
 
 import logging
 import re
+from urllib.parse import urlparse
 
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -40,10 +41,19 @@ def _slugify(text: str) -> str:
 
 
 def fetch_category(keyword: str, max_results: int = 30) -> list:
-    """Loads the IndiaMART category page for this product keyword and
-    returns every supplier found (across all cities shown on the page,
-    not city-filtered - do that afterward in Python since IndiaMART's URL
-    doesn't reliably support city query params here).
+    """Loads the IndiaMART category page for this product keyword (or a
+    full https://dir.indiamart.com/impcat/... URL, pasted directly - use
+    this when a typed keyword doesn't match IndiaMART's real category slug,
+    or to be certain you're hitting the exact page you found by browsing
+    their site). Returns every supplier found (across all cities shown on
+    the page, not city-filtered - do that afterward in Python since
+    IndiaMART's URL doesn't reliably support city query params here).
+
+    Note: /impcat/ pages only exist for physical PRODUCTS in IndiaMART's
+    taxonomy - service categories (e.g. "wedding planner", "marketing
+    agency") have no such page and will return [] every time, regardless
+    of keyword phrasing or capping/retries - it's a 404 on their site, not
+    a scraping failure.
 
     Returns a list of dicts shaped like a Google Place Details 'result'
     (name, website, formatted_address=city, rating, user_ratings_total,
@@ -57,10 +67,24 @@ def fetch_category(keyword: str, max_results: int = 30) -> list:
                        "playwright install chromium")
         return []
 
-    slug = _slugify(keyword)
-    if not slug:
+    raw = keyword.strip()
+    if not raw:
         return []
-    url = BASE_URL.format(slug=slug)
+
+    if raw.lower().startswith(("http://", "https://")):
+        # A pasted URL always wins over guessing - typed keywords get
+        # slugified and may not match IndiaMART's real category slug (or
+        # may not exist there at all, e.g. service categories like "wedding
+        # planner" have no /impcat/ page). Paste the exact URL from
+        # IndiaMART's own site when a keyword doesn't turn up anything.
+        url = raw
+        path_segment = raw.rstrip("/").rsplit("/", 1)[-1]
+        slug = _slugify(path_segment.replace(".html", "")) or "custom"
+    else:
+        slug = _slugify(raw)
+        if not slug:
+            return []
+        url = BASE_URL.format(slug=slug)
 
     try:
         with sync_playwright() as p:
@@ -115,8 +139,18 @@ def _parse_card(card, slug: str, source_url: str):
             digits = re.sub(r"\D", "", review_spans.nth(1).inner_text())
             reviews = int(digits) if digits else None
 
+        # Prefer the website URL (domain + path) for uniqueness - two
+        # different companies sharing a generic name (e.g. "Designer
+        # Furniture") but different sites would otherwise collide on
+        # name+city alone and silently overwrite each other on dedup. Path
+        # matters too: suppliers with no external site link to their own
+        # indiamart.com/<slug>/ profile instead, and domain alone would
+        # collide every such supplier onto "indiamart.com".
+        parsed_url = urlparse(website) if website else None
+        unique_fragment = _slugify(f"{parsed_url.netloc}{parsed_url.path}") if parsed_url and parsed_url.netloc else _slugify(name)
+
         return {
-            "place_id": f"indiamart:{slug}:{_slugify(name)}:{_slugify(city)}",
+            "place_id": f"indiamart:{slug}:{unique_fragment}:{_slugify(city)}",
             "name": name,
             "formatted_phone_number": "",
             "website": website,

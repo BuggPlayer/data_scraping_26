@@ -13,11 +13,24 @@ app.py              entry point — run this
 core/                config.py (all tunable constants), db.py (SQLite store),
                      email_finder.py (website email lookup), categories.py,
                      locations.py (city lists per country)
-templates/           the two web pages (scrape form, leads dashboard)
+templates/           index.html (Google/OSM scrape form), indiamart.html
+                     (separate IndiaMART page), dashboard.html (leads dashboard)
 tools/               linkedin_import.py — one-off CSV import script
 legacy/              old standalone scripts, kept for reference, no longer used
-data/                leads.db (created on first run) + old exported .xlsx files
+data/                leads.db (the shared database — dedup/contact-status/DNC
+                     live here across all runs), runs/<batch-id>/ (one new
+                     folder per scrape, each with its own leads.xlsx snapshot),
+                     exports/ (old exported .xlsx files)
 ```
+
+Every scrape run gets its own folder under `data/runs/<batch-id>/` with a
+snapshot of just that run's leads — useful for keeping "Tuesday's Mumbai
+cafe scrape" separate from "Thursday's Delhi restaurant scrape" on disk.
+The shared `leads.db` still tracks everything centrally (so dedup, contact
+status, and do-not-contact keep working across runs) — the dashboard's
+**Scrape runs** panel lets you check off multiple runs and export them
+merged into one file whenever you want, via `/export/all?batches=id1,id2`
+(same pattern for `/export/calls` and `/export/emails`).
 
 Every tunable number (scoring weights, safety caps, cost-estimate
 assumptions, email-finder settings) lives in `core/config.py` — nothing is
@@ -49,17 +62,20 @@ Open http://localhost:8000 to run a scrape:
    with OpenStreetMap only, no `GOOGLE_MAPS_API_KEY` is required at all.
 2. **Who** — check one or more target-customer groups (professional
    services, healthcare/wellness, retail/hospitality, trades & local
-   services), optionally add a legacy ProFixer/AMC preset or your own
-   custom categories.
+   services, education & coaching, automotive, events & hospitality, IT &
+   creative agencies), optionally add a legacy ProFixer/AMC preset or your
+   own custom categories.
 3. **Where** — check a whole country (selects all its major cities) or
    expand "Select specific cities" to pick individual ones — e.g. just
    Mumbai and Pune instead of all 25 Indian cities. Or add custom
    locations of your own.
-4. **How many leads** — cap the run at 50/100/150/200/500, or no limit
-   (only the safety cap applies). The scrape stops searching as soon as it
-   has found that many unique businesses, rather than exhausting every
-   category/city combination — this also means a small cap uses noticeably
-   less of your Google quota, not just fewer stored leads.
+4. **How many leads** — cap the run at 50/100/150/200/500, or no limit.
+   This applies **per source, independently** — with both Google and
+   OpenStreetMap selected and a cap of 100, each can contribute up to 100
+   (so up to 200 total, not 100 combined). Each source's search stops as
+   soon as it hits the cap rather than exhausting every category/city
+   combination, which also means a small cap uses noticeably less of your
+   Google quota specifically.
 5. Watch the live **estimate box** — it shows categories × locations,
    estimated businesses found, and estimated cost *before* you commit
    (OpenStreetMap always shows $0). If your selection is over the safety
@@ -92,16 +108,24 @@ lunch:
 Every lead's **Source** is visible on the dashboard so you know which ones
 have Google's richer data vs. OpenStreetMap's free-but-thinner data.
 
-### Free source: IndiaMART (wholesale/manufacturing suppliers, India only)
+### IndiaMART (separate page: http://localhost:8000/indiamart)
 
 IndiaMART is a B2B marketplace for manufacturers and wholesale suppliers —
-a different axis from the other sources, which target local service
-businesses. Important differences:
+different enough from the other sources (product-keyword search, India
+only, no per-city grid, no cost/quota concept) that it lives on its own
+page instead of being a checkbox in the main scraper. Important details:
 
-- **Search by product keyword, not business type.** "Stainless steel
-  wire" or "cotton yarn" works; "Electrician" or "Dental clinic" will
-  return nothing. Use the "Extra custom categories" box for product
-  keywords when IndiaMART is checked.
+- **Search by product keyword, not business type**, and **products only,
+  not services** — "stainless steel wire" or "cotton yarn" work; "wedding
+  planner" or "marketing agency" return 0 results because that category
+  page genuinely doesn't exist on IndiaMART's site (a real 404, not a
+  scraping failure) — services aren't listed under `/impcat/` at all.
+- **You can paste a full URL instead of a keyword.** Any line in the
+  keywords box can be a product keyword OR a full
+  `https://dir.indiamart.com/impcat/...` URL. Useful when a typed
+  keyword's auto-generated slug doesn't match IndiaMART's real one —
+  browse indiamart.com yourself, find the category, and paste its exact
+  URL instead of guessing.
 - **No phone numbers.** IndiaMART blurs contact details behind a
   mandatory phone-number + OTP login on their interactive search pages.
   This tool only reads their public, unauthenticated category pages
@@ -110,7 +134,7 @@ businesses. Important differences:
   count — but not a phone number. We deliberately do not automate the
   OTP login flow; use the extracted company website with the email finder
   instead, same as any other source.
-- **India only.** These pages don't support other countries.
+- **India only** — the city checkboxes on this page are India's cities only.
 - **Needs Playwright** (`playwright install chromium` — see Setup above)
   because listings render client-side; a plain HTTP request only gets
   the empty page shell.
@@ -272,11 +296,12 @@ lawyer confirm what applies to your specific target geography.
 
 - `app.py` — unified scraper + web UI (replaces the old scripts below,
   which were ~95% duplicated copies of the same tool)
-- `templates/index.html` — the scrape-a-new-batch page
+- `templates/index.html` — the Google/OSM scrape-a-new-batch page
+- `templates/indiamart.html` — the separate IndiaMART supplier-search page
 - `templates/dashboard.html` — the leads dashboard for calling/emailing
 - `core/config.py` — every tunable constant (scoring weights, safety caps,
   cost-estimate assumptions, email-finder settings)
-- `core/categories.py` — the 4 target-customer groups + legacy presets
+- `core/categories.py` — the 8 target-customer groups + legacy presets
 - `core/locations.py` — major-city lists for India/USA/Australia
 - `core/db.py` — SQLite schema, dedup, contact-status tracking
 - `core/email_finder.py` — crawls a business's own website for a contact email

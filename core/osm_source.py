@@ -59,12 +59,27 @@ CATEGORY_OSM_TAGS = {
     "Painter": [("craft", "painter")],
     "Carpenter": [("craft", "carpenter")],
     "Roofing contractor": [("craft", "roofer")],
+    "Driving school": [("amenity", "driving_school")],
+    "Auto repair shop": [("shop", "car_repair")],
+    "Car dealer": [("shop", "car")],
+    "Tire shop": [("shop", "tyres")],
+    "Car wash": [("amenity", "car_wash")],
+    "Auto parts store": [("shop", "car_parts")],
+    "Banquet hall": [("amenity", "events_venue")],
+    "Catering service": [("craft", "caterer")],
+    "Party supply store": [("shop", "party")],
+    "Web design agency": [("office", "it")],
+    "Graphic design studio": [("office", "graphic_design")],
+    "Marketing agency": [("office", "advertising_agency")],
+    "Photography studio": [("shop", "photo")],
 }
 
 _geocode_cache = {}
 _geocode_lock = threading.Lock()
 _last_nominatim_call = [0.0]
 _last_overpass_call = [0.0]
+
+OVERPASS_RETRYABLE_STATUS = {429, 502, 503, 504}
 
 
 def _throttle(last_call_holder, min_interval):
@@ -121,30 +136,55 @@ def _build_overpass_query(category: str, bbox) -> str:
     return f"[out:json][timeout:25];\n(\n  {body}\n);\nout center tags;"
 
 
+def _query_overpass(query: str, context: str) -> list:
+    """POSTs to Overpass with retry-with-backoff on transient failures
+    (502/503/504/429, or a request exception) - Overpass's shared public
+    instance returns these fairly often under load, and they almost always
+    succeed on a retry a few seconds later. Returns [] only after
+    exhausting retries."""
+    max_retries = config.OSM_OVERPASS_MAX_RETRIES
+    for attempt in range(max_retries + 1):
+        _throttle(_last_overpass_call, 1.0)
+        try:
+            resp = requests.post(
+                config.OSM_OVERPASS_URL,
+                data={"data": query},
+                headers={"User-Agent": config.OSM_USER_AGENT},
+                timeout=30,
+            )
+            if resp.status_code in OVERPASS_RETRYABLE_STATUS and attempt < max_retries:
+                wait = config.OSM_OVERPASS_RETRY_BACKOFF_SECONDS * (attempt + 1)
+                logging.warning(f"Overpass returned {resp.status_code} for {context}, "
+                                f"retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp.json().get("elements", [])
+        except requests.RequestException as e:
+            if attempt < max_retries:
+                wait = config.OSM_OVERPASS_RETRY_BACKOFF_SECONDS * (attempt + 1)
+                logging.warning(f"Overpass request failed for {context} ({e}), "
+                                f"retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(wait)
+                continue
+            logging.warning(f"Overpass query failed for {context} after {max_retries} retries: {e}")
+            return []
+    return []
+
+
 def search_places(category: str, location: dict, max_results: int = 60):
     """Returns a list of dicts already shaped like a Google Place Details
     'result' (formatted_phone_number, website, formatted_address, rating,
     user_ratings_total, business_status) so the rest of the pipeline can
     treat OSM and Google results identically. Returns [] on any failure -
-    a bad geocode or a flaky Overpass response shouldn't crash the run."""
+    a bad geocode or a flaky Overpass response (after retries) shouldn't
+    crash the run."""
     bbox = geocode_location(location["query_string"])
     if not bbox:
         return []
 
     query = _build_overpass_query(category, bbox)
-    _throttle(_last_overpass_call, 1.0)
-    try:
-        resp = requests.post(
-            config.OSM_OVERPASS_URL,
-            data={"data": query},
-            headers={"User-Agent": config.OSM_USER_AGENT},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        elements = resp.json().get("elements", [])
-    except requests.RequestException as e:
-        logging.warning(f"Overpass query failed for '{category}' in {location['query_string']}: {e}")
-        return []
+    elements = _query_overpass(query, context=f"'{category}' in {location['query_string']}")
 
     places = []
     for el in elements[:max_results]:

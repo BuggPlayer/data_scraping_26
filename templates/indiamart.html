@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IndiaMART Supplier Finder</title>
+<style>
+  :root { --primary: #c2410c; --bg: #f4f7fc; --card: white; --border: #e2e8f0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 40px 20px; }
+  .container { max-width: 720px; width: 100%; }
+  .card { background: var(--card); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); padding: 30px; margin-bottom: 20px; }
+  .topnav { display: flex; justify-content: space-between; margin-bottom: 12px; }
+  .topnav a { color: var(--primary); font-weight: 600; text-decoration: none; font-size: 0.9rem; }
+  h1 { color: #1e293b; font-size: 1.8rem; margin-bottom: 8px; }
+  h2 { color: #1e293b; font-size: 1.05rem; margin: 22px 0 10px; }
+  p.sub { color: #64748b; margin-bottom: 20px; }
+  label { font-weight: 600; display: block; margin: 12px 0 6px; color: #334155; }
+  textarea, select { width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 1rem; }
+  .check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; }
+  .check-row { display: flex; align-items: center; gap: 8px; font-weight: 500; color: #334155; font-size: 0.9rem; }
+  .check-row input { width: auto; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .checkbox-row input { width: auto; }
+  .btn { background: var(--primary); color: white; border: none; padding: 12px 28px; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 20px; width: 100%; }
+  .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+  .progress-bar { height: 12px; background: var(--border); border-radius: 10px; overflow: hidden; margin: 16px 0 8px; display:none; }
+  .progress-fill { height: 100%; width: 0%; background: var(--primary); }
+  .status-message { font-weight: 500; color: #475569; }
+  .exports a { display: inline-block; margin: 4px 8px 4px 0; padding: 8px 16px; background: #059669; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; }
+  .error { color: #dc2626; background: #fee2e2; padding: 10px; border-radius: 8px; display:none; margin-top:10px; }
+  .info-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 14px 16px; font-size: 0.85rem; color: #7c2d12; margin-bottom: 20px; line-height: 1.5; }
+  .info-box strong { color: #9a3412; }
+  .info-box code { background: #fed7aa; padding: 1px 5px; border-radius: 4px; font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="topnav">
+    <a href="/">← Back to Google/OSM Scraper</a>
+    <a href="/leads">Open Leads Dashboard →</a>
+  </div>
+
+  <div class="card">
+    <h1>IndiaMART Supplier Finder</h1>
+    <p class="sub">Free, India-only wholesale/manufacturing supplier search by product keyword.</p>
+
+    <div class="info-box">
+      <strong>Different from the main scraper:</strong> IndiaMART searches by
+      <strong>product keyword</strong> ("stainless steel wire", "cotton yarn"),
+      not business type. It's India-only, always free (no API key, no quota),
+      and doesn't return phone numbers — IndiaMART gates those behind a login.
+      You'll get company name, the supplier's own website, city, rating, and
+      review count; use the website with the email finder below for a contact.
+      <br><br>
+      <strong>Products only, not services:</strong> these pages only exist for
+      physical products in IndiaMART's catalog — "wedding planner" or
+      "marketing agency" will return 0 results because that page genuinely
+      doesn't exist on their site (not a bug here). If a keyword returns
+      nothing, browse <a href="https://www.indiamart.com" target="_blank" rel="noopener">indiamart.com</a>
+      yourself, find the real category, and paste its full URL instead —
+      e.g. <code>https://dir.indiamart.com/impcat/wicker-chair.html</code> —
+      any line here can be either a keyword or a full URL.
+    </div>
+
+    <h2>1. Product keywords or URLs</h2>
+    <label>One per line — keyword or a full dir.indiamart.com/impcat/... URL</label>
+    <textarea id="keywords" rows="4" placeholder="stainless steel wire&#10;https://dir.indiamart.com/impcat/wicker-chair.html&#10;ball bearings"></textarea>
+
+    <h2>2. Cities (optional)</h2>
+    <p class="sub" style="margin-bottom:10px;">Leave all unchecked to get results from whatever cities IndiaMART shows by default (often Mumbai-weighted). Check specific cities to filter to just those.</p>
+    <div class="check-grid" id="city-checks">
+      {% for city, region in india_cities %}
+      <label class="check-row"><input type="checkbox" class="city-check" value="{{city}}"> {{city}}</label>
+      {% endfor %}
+    </div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="find_emails" checked>
+      <label style="margin:0" for="find_emails">Attempt to find emails from supplier websites (slower)</label>
+    </div>
+
+    <button id="start-btn" class="btn" onclick="startScraping()">Start Scraping</button>
+
+    <div class="progress-bar" id="progress-box"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="status-message" id="status-message"></div>
+    <div class="error" id="error-box"></div>
+  </div>
+
+  <div class="card exports">
+    <h1 style="font-size:1.3rem">Export</h1>
+    <p class="sub">Pulls everything currently saved (excludes anything flagged do-not-contact). Or use the <a href="/leads">Leads Dashboard</a> to browse suppliers, merge specific runs, and manage outreach status.</p>
+    <a href="/export/calls">Call list (has phone)</a>
+    <a href="/export/emails">Email list (has email)</a>
+    <a href="/export/all">All leads</a>
+  </div>
+</div>
+
+<script>
+  let polling = null;
+
+  function gatherPayload() {
+    const keywords = document.getElementById('keywords').value.split('\n').map(s => s.trim()).filter(Boolean);
+    const cities = Array.from(document.querySelectorAll('.city-check:checked')).map(el => el.value);
+    const find_emails = document.getElementById('find_emails').checked;
+    return { keywords, cities, find_emails };
+  }
+
+  async function startScraping() {
+    const payload = gatherPayload();
+    if (payload.keywords.length === 0) { alert('Enter at least one product keyword'); return; }
+
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('progress-box').style.display = 'block';
+    document.getElementById('error-box').style.display = 'none';
+
+    try {
+      const res = await fetch('/indiamart/start', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed'); }
+      polling = setInterval(checkProgress, 1000);
+    } catch (e) {
+      document.getElementById('error-box').style.display = 'block';
+      document.getElementById('error-box').textContent = e.message;
+      document.getElementById('start-btn').disabled = false;
+    }
+  }
+
+  async function checkProgress() {
+    const res = await fetch('/progress');
+    const data = await res.json();
+    document.getElementById('progress-fill').style.width = data.percent + '%';
+    document.getElementById('status-message').textContent = data.message;
+    if (data.status === 'completed' || data.status === 'error') {
+      clearInterval(polling);
+      document.getElementById('start-btn').disabled = false;
+      if (data.status === 'error') {
+        document.getElementById('error-box').style.display = 'block';
+        document.getElementById('error-box').textContent = data.message;
+      }
+    }
+  }
+</script>
+</body>
+</html>

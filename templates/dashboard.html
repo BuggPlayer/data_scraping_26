@@ -4,62 +4,116 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Leads Dashboard</title>
 <style>
-  :root { --primary: #2d89ef; --bg: #f4f7fc; --card: white; --border: #e2e8f0; }
+  :root {
+    --primary: #2d89ef; --primary-dark: #1b6bc1; --bg: #eef2f9; --card: #ffffff;
+    --border: #e2e8f0; --ink: #1e293b; --muted: #64748b; --muted-soft: #94a3b8;
+    --hot: #dc2626; --hot-bg: #fef2f2;
+    --warm: #b45309; --warm-bg: #fffbeb;
+    --cold: #475569; --cold-bg: #f1f5f9;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 24px; color: #1e293b; }
-  .wrap { max-width: 1400px; margin: 0 auto; }
-  .topnav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .topnav a { color: var(--primary); font-weight: 600; text-decoration: none; }
-  h1 { font-size: 1.6rem; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); padding: 28px; color: var(--ink); }
+  .wrap { max-width: 1500px; margin: 0 auto; }
+
+  .topnav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .topnav a { color: var(--primary); font-weight: 600; text-decoration: none; font-size: 0.92rem; }
+  .topnav a:hover { text-decoration: underline; }
+  h1 { font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 0.95rem; font-weight: 700; color: var(--ink); }
+
+  .panel { background: var(--card); border-radius: 14px; box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06); margin-bottom: 18px; }
 
   .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-  .stat { background: var(--card); border-radius: 12px; padding: 14px 18px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); min-width: 110px; }
-  .stat .num { font-size: 1.5rem; font-weight: 700; }
-  .stat .label { color: #64748b; font-size: 0.8rem; }
+  .stat { background: var(--card); border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06); min-width: 116px; flex: 1; }
+  .stat .num { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+  .stat .label { color: var(--muted); font-size: 0.78rem; font-weight: 600; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
 
-  .toolbar { background: var(--card); border-radius: 12px; padding: 14px 18px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-  .toolbar input, .toolbar select { padding: 8px 12px; border: 2px solid var(--border); border-radius: 8px; font-size: 0.95rem; }
-  .toolbar input[type="text"] { flex: 1; min-width: 200px; }
+  .toolbar { padding: 16px 18px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .toolbar input, .toolbar select { padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.9rem; background: #fff; color: var(--ink); transition: border-color .15s; }
+  .toolbar input:focus, .toolbar select:focus { outline: none; border-color: var(--primary); }
+  .toolbar input[type="text"] { flex: 1; min-width: 220px; }
   .toolbar .exports { margin-left: auto; display: flex; gap: 8px; }
-  .toolbar .exports a { padding: 8px 14px; background: #059669; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+  .toolbar .exports a { padding: 9px 15px; background: #059669; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.86rem; white-space: nowrap; transition: background .15s; }
+  .toolbar .exports a:hover { background: #047857; }
+  .toolbar-check { display:flex; align-items:center; gap:6px; font-size:0.88rem; color: var(--muted); white-space: nowrap; }
 
-  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
-  thead { background: #f1f5f9; }
-  th, td { padding: 10px 12px; text-align: left; font-size: 0.88rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  th { color: #475569; font-weight: 600; }
-  tbody tr:hover { background: #f8fafc; }
-  tbody tr.dnc { opacity: 0.5; }
+  .table-scroll { overflow-x: auto; border-radius: 14px; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); font-size: 0.86rem; }
+  thead th { position: sticky; top: 0; background: #f8fafc; color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.04em; text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border); white-space: nowrap; z-index: 1; }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid #eef1f6; vertical-align: middle; }
+  tbody tr { border-left: 3px solid transparent; transition: background .1s; }
+  tbody tr:nth-child(even) { background: #fbfcfe; }
+  tbody tr:hover { background: #eff6ff; }
+  tbody tr.dnc { opacity: 0.45; }
+  tbody tr.q-hot { border-left-color: var(--hot); }
+  tbody tr.q-warm { border-left-color: var(--warm); }
+  tbody tr.q-cold { border-left-color: var(--border); }
 
-  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
-  .badge-hot { background: #fee2e2; color: #b91c1c; }
-  .badge-warm { background: #fef3c7; color: #92400e; }
-  .badge-cold { background: #e2e8f0; color: #475569; }
+  .biz-name { font-weight: 700; color: var(--ink); font-size: 0.92rem; }
+  .sub-line { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+
+  .badge { display: inline-flex; align-items:center; gap:5px; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; margin-top: 5px; }
+  .badge::before { content:''; width:6px; height:6px; border-radius:50%; }
+  .badge-hot { background: var(--hot-bg); color: var(--hot); }
+  .badge-hot::before { background: var(--hot); }
+  .badge-warm { background: var(--warm-bg); color: var(--warm); }
+  .badge-warm::before { background: var(--warm); }
+  .badge-cold { background: var(--cold-bg); color: var(--cold); }
+  .badge-cold::before { background: var(--muted-soft); }
+
+  .score-pill { display:inline-block; min-width: 34px; text-align:center; padding: 3px 8px; border-radius: 7px; font-weight: 800; font-size: 0.82rem; }
+  .score-hot { background: var(--hot-bg); color: var(--hot); }
+  .score-warm { background: var(--warm-bg); color: var(--warm); }
+  .score-cold { background: var(--cold-bg); color: var(--cold); }
+
+  .source-pill { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #eef2ff; color: #4338ca; }
+  .source-pill.osm { background: #ecfdf5; color: #047857; }
+  .source-pill.indiamart { background: #fff7ed; color: #c2410c; }
+  .source-pill.linkedin { background: #eff6ff; color: #1d4ed8; }
 
   a.contact-link { color: var(--primary); text-decoration: none; font-weight: 600; }
   a.contact-link:hover { text-decoration: underline; }
-  .muted { color: #94a3b8; }
+  .muted { color: var(--muted-soft); }
 
-  select.status-select { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.82rem; }
-  input.notes-input { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.82rem; width: 140px; }
+  select.status-select { padding: 6px 8px; border-radius: 7px; border: 1.5px solid var(--border); font-size: 0.8rem; background: #fff; }
+  input.notes-input { padding: 6px 9px; border-radius: 7px; border: 1.5px solid var(--border); font-size: 0.8rem; width: 140px; }
 
-  .empty { text-align: center; padding: 60px 20px; color: #64748b; }
+  .empty { text-align: center; padding: 70px 20px; color: var(--muted); }
   .empty a { color: var(--primary); font-weight: 600; }
 
-  .saved-flash { display: inline-block; color: #059669; font-size: 0.75rem; margin-left: 6px; opacity: 0; transition: opacity 0.3s; }
+  .saved-flash { display: inline-block; color: #059669; font-size: 0.72rem; margin-left: 6px; opacity: 0; transition: opacity 0.3s; font-weight: 700; }
   .saved-flash.show { opacity: 1; }
 
-  .ai-status { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 5px 12px; border-radius: 999px; font-weight: 600; }
-  .ai-status .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .ai-status { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 5px 12px; border-radius: 999px; font-weight: 700; }
+  .ai-status .dot { width: 7px; height: 7px; border-radius: 50%; }
   .ai-status.online { background: #dcfce7; color: #166534; }
   .ai-status.online .dot { background: #22c55e; }
-  .ai-status.offline { background: #f1f5f9; color: #64748b; }
-  .ai-status.offline .dot { background: #94a3b8; }
+  .ai-status.offline { background: #f1f5f9; color: var(--muted); }
+  .ai-status.offline .dot { background: var(--muted-soft); }
 
   .ai-cell { min-width: 220px; max-width: 320px; }
-  .ai-pitch-text { font-size: 0.85rem; color: #334155; font-style: italic; }
-  .ai-btn { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: white; font-size: 0.78rem; font-weight: 600; cursor: pointer; color: var(--primary); }
+  .ai-pitch-text { font-size: 0.83rem; color: #334155; font-style: italic; line-height: 1.4; }
+  .ai-btn { padding: 5px 10px; border-radius: 6px; border: 1.5px solid var(--border); background: white; font-size: 0.76rem; font-weight: 700; cursor: pointer; color: var(--primary); transition: border-color .15s; }
+  .ai-btn:hover { border-color: var(--primary); }
   .ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .ai-error { color: #dc2626; font-size: 0.78rem; }
+  .ai-error { color: #dc2626; font-size: 0.76rem; }
+
+  /* Batches panel */
+  .batches-header { display:flex; align-items:center; justify-content: space-between; padding: 16px 18px 4px; }
+  .batches-header a { font-size: 0.82rem; color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer; }
+  .batch-list { max-height: 220px; overflow-y: auto; padding: 6px 10px 14px; }
+  .batch-row { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 8px; font-size: 0.85rem; }
+  .batch-row:hover { background: #f8fafc; }
+  .batch-row input { width: auto; flex-shrink: 0; }
+  .batch-info { flex: 1; min-width: 0; }
+  .batch-label { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .batch-meta { color: var(--muted); font-size: 0.75rem; margin-top: 1px; }
+  .batch-count { font-weight: 700; color: var(--ink); font-size: 0.85rem; white-space: nowrap; }
+  .batch-actions { display: flex; gap: 8px; padding: 0 18px 16px; }
+  .batch-actions a { padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85rem; background: #f1f5f9; color: var(--muted); pointer-events: none; opacity: 0.6; transition: all .15s; }
+  .batch-actions a.enabled { background: #059669; color: white; pointer-events: auto; opacity: 1; }
+  .batch-actions a.enabled:hover { background: #047857; }
+  .batches-empty { padding: 10px 18px 18px; color: var(--muted); font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -74,7 +128,20 @@
 
   <div class="stats" id="stats"></div>
 
-  <div class="toolbar">
+  <div class="panel">
+    <div class="batches-header">
+      <h2>Scrape runs</h2>
+      <a id="toggle-batches">Show/hide</a>
+    </div>
+    <div class="batch-list" id="batch-list"></div>
+    <div class="batch-actions">
+      <a href="#" id="batch-export-calls">Export selected: calls</a>
+      <a href="#" id="batch-export-emails">Export selected: emails</a>
+      <a href="#" id="batch-export-all">Export selected: all</a>
+    </div>
+  </div>
+
+  <div class="panel toolbar">
     <input type="text" id="search" placeholder="Search business, locality, category...">
     <select id="filter-qualification">
       <option value="">All qualifications</option>
@@ -97,7 +164,7 @@
     <select id="filter-country">
       <option value="">All countries</option>
     </select>
-    <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem; color:#475569;">
+    <label class="toolbar-check">
       <input type="checkbox" id="hide-dnc" checked> Hide do-not-contact
     </label>
     <div class="exports">
@@ -107,11 +174,12 @@
     </div>
   </div>
 
-  <div id="table-container"></div>
+  <div class="table-scroll panel" id="table-container"></div>
 </div>
 
 <script>
 let allLeads = [];
+let allBatches = [];
 
 const CALL_STATUSES = ["not_called","attempted","connected","voicemail","no_answer","wrong_number","callback","converted","rejected"];
 const EMAIL_STATUSES = ["not_sent","sent","opened","replied","bounced","unsubscribed"];
@@ -127,6 +195,50 @@ async function loadLeads() {
   renderStats();
   renderTable();
 }
+
+async function loadBatches() {
+  const res = await fetch('/api/batches');
+  allBatches = await res.json();
+  renderBatches();
+}
+
+function renderBatches() {
+  const list = document.getElementById('batch-list');
+  if (allBatches.length === 0) {
+    list.innerHTML = '';
+    document.querySelector('.panel:has(#batch-list)').style.display = 'none';
+    return;
+  }
+  list.innerHTML = allBatches.map(b => `
+    <label class="batch-row">
+      <input type="checkbox" class="batch-check" value="${b.batch_id}">
+      <div class="batch-info">
+        <div class="batch-label">${escapeHtml(b.label || b.batch_id)}</div>
+        <div class="batch-meta">${escapeHtml(b.sources || '')} · ${escapeHtml(b.created_at || '')}</div>
+      </div>
+      <div class="batch-count">${b.lead_count}</div>
+    </label>
+  `).join('');
+  document.querySelectorAll('.batch-check').forEach(el => el.addEventListener('change', updateBatchExportLinks));
+  updateBatchExportLinks();
+}
+
+function updateBatchExportLinks() {
+  const selected = Array.from(document.querySelectorAll('.batch-check:checked')).map(el => el.value);
+  const enabled = selected.length > 0;
+  const suffix = enabled ? `?batches=${selected.map(encodeURIComponent).join(',')}` : '';
+  ['calls', 'emails', 'all'].forEach(kind => {
+    const a = document.getElementById(`batch-export-${kind}`);
+    a.href = `/export/${kind}${suffix}`;
+    a.className = enabled ? 'enabled' : '';
+  });
+}
+
+document.getElementById('toggle-batches').addEventListener('click', (e) => {
+  e.preventDefault();
+  const list = document.getElementById('batch-list');
+  list.style.display = list.style.display === 'none' ? 'block' : 'none';
+});
 
 function populateCountryFilter() {
   const select = document.getElementById('filter-country');
@@ -165,6 +277,12 @@ function badgeClass(q) {
   if (q === 'Hot') return 'badge-hot';
   if (q === 'Warm') return 'badge-warm';
   return 'badge-cold';
+}
+
+function scoreClass(q) {
+  if (q === 'Hot') return 'score-hot';
+  if (q === 'Warm') return 'score-warm';
+  return 'score-cold';
 }
 
 function renderTable() {
@@ -230,6 +348,13 @@ function renderTable() {
   });
 }
 
+function sourcePill(source) {
+  if (source === 'openstreetmap') return '<span class="source-pill osm">OSM</span>';
+  if (source === 'indiamart') return '<span class="source-pill indiamart">IndiaMART</span>';
+  if (source === 'linkedin_manual') return '<span class="source-pill linkedin">LinkedIn</span>';
+  return '<span class="source-pill">Google</span>';
+}
+
 function rowHtml(l) {
   const phone = l.phone
     ? `<a class="contact-link" href="tel:${l.phone}">${l.phone}</a>`
@@ -237,18 +362,21 @@ function rowHtml(l) {
   const email = l.email
     ? `<a class="contact-link" href="mailto:${l.email}">${l.email}</a>`
     : `<span class="muted">—</span>`;
-  const sourceLabel = l.source === 'openstreetmap' ? 'OSM' : (l.source === 'linkedin_manual' ? 'LinkedIn' : 'Google');
+  const qClass = l.qualification === 'Hot' ? 'q-hot' : l.qualification === 'Warm' ? 'q-warm' : 'q-cold';
 
   return `
-  <tr class="${l.do_not_contact ? 'dnc' : ''}">
-    <td><strong>${escapeHtml(l.business_name || '')}</strong><br><span class="badge ${badgeClass(l.qualification)}">${l.qualification}</span></td>
-    <td>${escapeHtml(l.category || '')}<br><span class="muted">${escapeHtml(l.locality || '')}</span></td>
-    <td>${escapeHtml(l.country || '')}<br><span class="muted">${escapeHtml(l.region || '')}</span></td>
-    <td><span class="muted">${sourceLabel}</span></td>
+  <tr class="${qClass} ${l.do_not_contact ? 'dnc' : ''}">
+    <td>
+      <div class="biz-name">${escapeHtml(l.business_name || '')}</div>
+      <span class="badge ${badgeClass(l.qualification)}">${l.qualification}</span>
+    </td>
+    <td>${escapeHtml(l.category || '')}<div class="sub-line">${escapeHtml(l.locality || '')}</div></td>
+    <td>${escapeHtml(l.country || '')}<div class="sub-line">${escapeHtml(l.region || '')}</div></td>
+    <td>${sourcePill(l.source)}</td>
     <td>${phone}</td>
     <td>${email}</td>
     <td class="ai-cell" id="ai-cell-${l.id}">${aiCellHtml(l)}</td>
-    <td>${l.lead_score ?? ''}</td>
+    <td><span class="score-pill ${scoreClass(l.qualification)}">${l.lead_score ?? ''}</span></td>
     <td>
       <select class="status-select" id="call-${l.id}">
         ${CALL_STATUSES.map(s => `<option value="${s}" ${s === l.call_status ? 'selected' : ''}>${label(s)}</option>`).join('')}
@@ -333,6 +461,7 @@ document.getElementById('filter-country').addEventListener('change', renderTable
 document.getElementById('hide-dnc').addEventListener('change', renderTable);
 
 loadLeads();
+loadBatches();
 checkAiStatus();
 </script>
 </body>

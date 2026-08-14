@@ -127,7 +127,10 @@ def _resolve_locations(data: dict) -> List[dict]:
 
 
 def _resolve_sources(data: dict) -> List[str]:
-    sources = [s for s in data.get("sources", ["google"]) if s in ("google", "osm", "indiamart")]
+    # IndiaMART lives on its own dedicated page/flow (/indiamart) - it doesn't
+    # fit the categories x cities grid the same way (product keyword search,
+    # India-only, no per-city URL), so it's not a selectable source here.
+    sources = [s for s in data.get("sources", ["google"]) if s in ("google", "osm")]
     return sources or ["google"]
 
 
@@ -145,42 +148,44 @@ def _resolve_max_leads(data: dict):
 
 def scrape_leads(api_key: str, categories: List[str], locations: List[dict], amc_mode: bool,
                   find_emails: bool, sources: List[str], max_leads=None, batch_id: str = None):
-    """max_leads caps Google Places only - it's the source that costs money
-    past the free quota. OpenStreetMap and IndiaMART are free, so they
-    always collect everything found for the selected categories/locations,
-    uncapped (still bounded by MAX_QUERIES_PER_RUN on categories x locations,
-    which is a separate politeness/safety cap, not a cost cap)."""
+    """max_leads caps each selected source independently - Google stops
+    once it's found max_leads, and separately OpenStreetMap also stops once
+    it's found max_leads (still bounded by MAX_QUERIES_PER_RUN on
+    categories x locations, which is a separate politeness/safety cap on
+    query volume, not a per-source lead-count cap)."""
     global progress
     progress.update(status="running", message="Searching...", percent=0)
 
     session = requests.Session()
     # Each item: place_id/name/category/types/region/country/city, plus either
     # needs_details=True (Google - still needs a Details call) or a fully
-    # normalized result dict already in hand (OSM/IndiaMART - already
-    # complete, shaped like a Google Details response).
+    # normalized result dict already in hand (OSM - already complete,
+    # shaped like a Google Details response).
     all_items = []
     seen_ids = set()
-    google_count = 0
-    google_capped = False
-    # IndiaMART has no reliable per-city URL filter - one page load per
-    # category returns suppliers across cities, filtered by city in Python
-    # afterward. Cache the raw per-category fetch so N selected cities for
-    # the same category don't trigger N slow Playwright page loads.
-    indiamart_cache = {}
+    source_counts = {"google_maps": 0, "openstreetmap": 0}
+    source_capped = {"google_maps": False, "openstreetmap": False}
+    active_source_keys = [k for k, present in (("google_maps", "google" in sources), ("openstreetmap", "osm" in sources)) if present]
     query_pairs = [(cat, loc) for cat in categories for loc in locations]
     search_steps = len(query_pairs) * len(sources) or 1
     step = 0
 
-    def add_item(item):
-        if item["place_id"] not in seen_ids:
+    def add_item(item, source_key):
+        is_new = item["place_id"] not in seen_ids
+        if is_new:
             seen_ids.add(item["place_id"])
             all_items.append(item)
-            return True
-        return False
+            source_counts[source_key] += 1
+        if max_leads and source_counts[source_key] >= max_leads:
+            source_capped[source_key] = True
+        return is_new
 
     try:
         for category, loc in query_pairs:
-            if "google" in sources and not google_capped:
+            if max_leads and active_source_keys and all(source_capped[k] for k in active_source_keys):
+                break
+
+            if "google" in sources and not source_capped["google_maps"]:
                 step += 1
                 params = {"query": f"{category} in {loc['query_string']}", "key": api_key}
                 while True:
@@ -190,17 +195,15 @@ def scrape_leads(api_key: str, categories: List[str], locations: List[dict], amc
                     r.raise_for_status()
                     data = r.json()
                     for p in data.get("results", []):
-                        if add_item({
+                        add_item({
                             "place_id": p["place_id"], "name": p["name"],
                             "category": category, "types": p.get("types", []),
                             "region": loc["region"], "country": loc["country"], "city": loc["city"],
                             "needs_details": True, "result": None, "source": "google_maps",
-                        }):
-                            google_count += 1
-                        if max_leads and google_count >= max_leads:
-                            google_capped = True
+                        }, "google_maps")
+                        if source_capped["google_maps"]:
                             break
-                    if google_capped:
+                    if source_capped["google_maps"]:
                         break
                     next_token = data.get("next_page_token")
                     if not next_token:
@@ -208,9 +211,9 @@ def scrape_leads(api_key: str, categories: List[str], locations: List[dict], amc
                     time.sleep(config.NEXT_PAGE_TOKEN_DELAY_SECONDS)
                     params = {"pagetoken": next_token, "key": api_key}
                 progress["percent"] = int((step / search_steps) * 40)
-                progress["message"] = f"[Google] Searching '{category}' in {loc['query_string']}... ({google_count} found)"
+                progress["message"] = f"[Google] Searching '{category}' in {loc['query_string']}... ({source_counts['google_maps']} found)"
 
-            if "osm" in sources:
+            if "osm" in sources and not source_capped["openstreetmap"]:
                 step += 1
                 osm_places = osm_source.search_places(category, loc)
                 for p in osm_places:
@@ -219,26 +222,11 @@ def scrape_leads(api_key: str, categories: List[str], locations: List[dict], amc
                         "category": category, "types": [],
                         "region": loc["region"], "country": loc["country"], "city": loc["city"],
                         "needs_details": False, "result": p, "source": "openstreetmap",
-                    })
+                    }, "openstreetmap")
+                    if source_capped["openstreetmap"]:
+                        break
                 progress["percent"] = int((step / search_steps) * 40)
-                progress["message"] = f"[OpenStreetMap] Searching '{category}' in {loc['query_string']}... ({len(all_items)} found)"
-
-            if "indiamart" in sources:
-                step += 1
-                if category not in indiamart_cache:
-                    progress["message"] = f"[IndiaMART] Loading suppliers for '{category}'..."
-                    indiamart_cache[category] = indiamart_source.fetch_category(category)
-                raw = indiamart_cache[category]
-                city_matches = [r for r in raw if loc["city"].lower() in r["formatted_address"].lower()] if loc.get("city") else raw
-                for p in city_matches:
-                    add_item({
-                        "place_id": p["place_id"], "name": p["name"],
-                        "category": category, "types": [],
-                        "region": loc["region"], "country": loc["country"], "city": loc["city"],
-                        "needs_details": False, "result": p, "source": "indiamart",
-                    })
-                progress["percent"] = int((step / search_steps) * 40)
-                progress["message"] = f"[IndiaMART] Searching '{category}' in {loc['query_string']}... ({len(all_items)} found)"
+                progress["message"] = f"[OpenStreetMap] Searching '{category}' in {loc['query_string']}... ({source_counts['openstreetmap']} found)"
 
         unique = list({item["place_id"]: item for item in all_items}.values())
         total = len(unique) or 1
@@ -324,6 +312,93 @@ def _finalize_batch(batch_id: str):
     db.set_batch_lead_count(batch_id, len(rows))
 
 
+def scrape_indiamart_leads(keywords: List[str], cities: List[str], find_emails: bool, batch_id: str):
+    """IndiaMART's own dedicated scrape flow - product-keyword search,
+    India-only, one Playwright page load per keyword (not per city, since
+    there's no reliable per-city URL filter). Saves into the same shared
+    leads.db as everything else, tagged source='indiamart'."""
+    global progress
+    progress.update(status="running", message="Searching...", percent=0)
+
+    all_items = []
+    seen_ids = set()
+    total_steps = len(keywords) or 1
+
+    try:
+        for i, keyword in enumerate(keywords):
+            # A pasted URL makes an ugly "category" value in the dashboard -
+            # store the slug (e.g. "wicker-chair") instead, while still
+            # fetching from the exact URL the user gave.
+            label = keyword
+            if keyword.lower().startswith(("http://", "https://")):
+                path_segment = keyword.rstrip("/").rsplit("/", 1)[-1]
+                label = path_segment.replace(".html", "").replace("-", " ") or keyword
+
+            progress["message"] = f"[IndiaMART] Loading suppliers for '{label}'..."
+            raw = indiamart_source.fetch_category(keyword)
+            matches = [r for r in raw if any(c.lower() in r["formatted_address"].lower() for c in cities)] if cities else raw
+            for p in matches:
+                if p["place_id"] not in seen_ids:
+                    seen_ids.add(p["place_id"])
+                    all_items.append({"place_id": p["place_id"], "name": p["name"], "category": label, "result": p})
+            progress["percent"] = int(((i + 1) / total_steps) * 40)
+            progress["message"] = f"[IndiaMART] '{label}' done ({len(all_items)} found so far)"
+
+        total = len(all_items) or 1
+        saved = 0
+
+        for i, item in enumerate(all_items):
+            result = item["result"]
+            biz_name = result.get("name", item["name"])
+            score = calculate_lead_score(result, biz_name, [], amc_mode=False)
+            qualification = ("Hot" if score >= config.HOT_THRESHOLD
+                              else "Warm" if score >= config.WARM_THRESHOLD
+                              else "Cold")
+            website = result.get("website", "")
+
+            email = ""
+            if find_emails and website:
+                progress["message"] = f"Looking up email for {biz_name}..."
+                try:
+                    email = email_finder.find_email(website)
+                except Exception as e:
+                    logging.warning(f"Email lookup failed for {website}: {e}")
+
+            db.upsert_lead({
+                "place_id": item["place_id"],
+                "business_name": biz_name,
+                "category": item["category"],
+                "locality": result.get("formatted_address", ""),
+                "region": "",
+                "country": "India",
+                "address": result.get("formatted_address", ""),
+                "phone": result.get("formatted_phone_number", ""),
+                "website": website,
+                "email": email,
+                "rating": result.get("rating") or None,
+                "reviews": result.get("user_ratings_total") or None,
+                "business_status": "",
+                "maps_url": result.get("url", ""),
+                "lead_score": score,
+                "qualification": qualification,
+                "source": "indiamart",
+                "batch_id": batch_id,
+            })
+            saved += 1
+
+            progress["percent"] = 40 + int((i + 1) / total * 60)
+            progress["message"] = f"Saved {saved}/{total}: {biz_name}"
+            time.sleep(config.PER_LEAD_THROTTLE_SECONDS)
+
+        if batch_id:
+            _finalize_batch(batch_id)
+
+        progress.update(status="completed", percent=100, message=f"Done. {saved} suppliers processed, stored in data/leads.db")
+
+    except Exception as e:
+        progress.update(status="error", message=str(e))
+
+
 @app.route("/estimate", methods=["POST"])
 def estimate():
     data = request.json or {}
@@ -336,10 +411,8 @@ def estimate():
 
     use_google = "google" in sources
     use_osm = "osm" in sources
-    use_indiamart = "indiamart" in sources
 
-    # max_leads caps Google only (it's the source that costs money) - free
-    # sources are never capped, so their estimate contribution ignores it.
+    # max_leads caps each selected source independently (mirrors scrape_leads).
     google_businesses_low = google_businesses_high = 0
     if use_google:
         google_businesses_point = total_queries * config.AVG_RESULTS_PER_QUERY
@@ -349,14 +422,17 @@ def estimate():
             google_businesses_low = min(google_businesses_low, max_leads)
             google_businesses_high = min(google_businesses_high, max_leads)
 
-    free_businesses_point = 0
+    osm_businesses_low = osm_businesses_high = 0
     if use_osm:
-        free_businesses_point += total_queries * config.OSM_AVG_RESULTS_PER_QUERY
-    if use_indiamart:
-        free_businesses_point += total_queries * config.INDIAMART_AVG_RESULTS_PER_QUERY
+        osm_businesses_point = total_queries * config.OSM_AVG_RESULTS_PER_QUERY
+        osm_businesses_low = osm_businesses_point * low
+        osm_businesses_high = osm_businesses_point * high
+        if max_leads:
+            osm_businesses_low = min(osm_businesses_low, max_leads)
+            osm_businesses_high = min(osm_businesses_high, max_leads)
 
-    businesses_low = google_businesses_low + free_businesses_point * low
-    businesses_high = google_businesses_high + free_businesses_point * high
+    businesses_low = google_businesses_low + osm_businesses_low
+    businesses_high = google_businesses_high + osm_businesses_high
 
     cost_low = cost_high = 0.0
     quota = None
@@ -391,8 +467,6 @@ def estimate():
     free_source_names = []
     if use_osm:
         free_source_names.append("OpenStreetMap")
-    if use_indiamart:
-        free_source_names.append("IndiaMART")
 
     if use_google:
         note = ("Estimate accounts for your remaining free monthly Google Places quota "
@@ -573,6 +647,49 @@ def index():
         country_cities=COUNTRY_CITY_LISTS,
         max_queries=config.MAX_QUERIES_PER_RUN,
     )
+
+
+@app.route("/indiamart")
+def indiamart_page():
+    return render_template("indiamart.html", india_cities=COUNTRY_CITY_LISTS.get("India", []))
+
+
+@app.route("/indiamart/start", methods=["POST"])
+def indiamart_start():
+    data = request.json or {}
+    keywords = [k.strip() for k in data.get("keywords", []) if k.strip()]
+    if not keywords:
+        return jsonify({"error": "Enter at least one product keyword"}), 400
+
+    if len(keywords) > config.MAX_QUERIES_PER_RUN:
+        return jsonify({"error": f"Too many keywords ({len(keywords)}), over the "
+                                  f"{config.MAX_QUERIES_PER_RUN}-keyword safety cap (set "
+                                  f"MAX_QUERIES_PER_RUN in .env to raise it)."}), 400
+
+    cities = [c.strip() for c in data.get("cities", []) if c.strip()]
+    find_emails = bool(data.get("find_emails", True))
+
+    if progress["status"] == "running":
+        return jsonify({"error": "A scrape is already running"}), 409
+
+    location_hint = [{"city": c} for c in cities] if cities else [{"city": "India"}]
+    batch_id = _make_batch_id(keywords, location_hint)
+    db.create_batch(
+        batch_id=batch_id,
+        label=f"IndiaMART: {keywords[0]}" + (f" +{len(keywords) - 1}" if len(keywords) > 1 else ""),
+        sources="indiamart",
+        categories_summary=", ".join(keywords[:5]) + ("..." if len(keywords) > 5 else ""),
+        locations_summary=(", ".join(cities[:5]) + ("..." if len(cities) > 5 else "")) if cities else "All cities",
+        output_dir=os.path.join("data", "runs", batch_id),
+    )
+
+    thread = threading.Thread(
+        target=scrape_indiamart_leads,
+        args=(keywords, cities, find_emails, batch_id),
+        daemon=True,
+    )
+    thread.start()
+    return jsonify({"message": "Scraping started", "batch_id": batch_id})
 
 
 if __name__ == "__main__":

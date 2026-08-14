@@ -35,6 +35,33 @@ CATEGORY_GROUPS = {
             "Pest control", "Home cleaning service", "Roofing contractor",
         ],
     },
+    "education_coaching": {
+        "label": "Education & coaching (tutoring, coaching institutes, driving schools)",
+        "categories": [
+            "Tutoring center", "Coaching institute", "Driving school",
+            "Language institute", "Computer training institute",
+        ],
+    },
+    "automotive": {
+        "label": "Automotive (repair shops, car dealers, tire shops)",
+        "categories": [
+            "Auto repair shop", "Car dealer", "Tire shop", "Car wash", "Auto parts store",
+        ],
+    },
+    "events_hospitality": {
+        "label": "Events & hospitality (wedding planners, banquet halls, decorators)",
+        "categories": [
+            "Wedding planner", "Banquet hall", "Event decorator",
+            "Catering service", "Party supply store",
+        ],
+    },
+    "it_creative_agencies": {
+        "label": "IT & creative agencies (web/graphic design, marketing, photography)",
+        "categories": [
+            "Web design agency", "Graphic design studio", "Marketing agency",
+            "Photography studio", "Video production company",
+        ],
+    },
 }
 
 # Kept for the original ProFixer/AMC lead-gen use case (a different, more
