@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p core templates tools legacy data/exports)",
+      "Bash(touch core/__init__.py)",
+      "Bash(mv db.py email_finder.py core/)",
+      "Bash(mv linkedin_import.py tools/)",
+      "Bash(mv amc_leads.py profixer_leads.py lead_generator.py run.md legacy/)",
+      "Bash(mv final/lead_generator_all.py legacy/)",
+      "Bash(rmdir final *)",
+      "Bash(kill %1)",
+      "Bash(rm -f data/leads.db /tmp/calls_check.xlsx /tmp/app_server.log)",
+      "Bash(jobs)",
+      "Bash(lsof *)",
+      "Bash(kill 20455)",
+      "Bash(xargs -r kill)",
+      "WebFetch(domain:jina.ai)",
+      "WebFetch(domain:serper.dev)",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:www.apollo.io)",
+      "WebFetch(domain:docs.apollo.io)",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://www.justdial.com/Mumbai/Electricians\" -o /tmp/justdial_test.html -w \"HTTP %{http_code}, size: %{size_download} bytes\\\\n\")",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://www.justdial.com/Mumbai/Electricians\" -o /tmp/justdial_test.html -w \"HTTP %{http_code}, size: %{size_download} bytes, final URL: %{url_effective}\\\\n\")",
+      "Bash(xxd /tmp/justdial_test.html)",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://dir.indiamart.com/search.mp?ss=electrical+contractors&cq=Mumbai\" -o /tmp/indiamart_test.html -w \"HTTP %{http_code}, size: %{size_download} bytes\\\\n\")",
+      "Bash(python3 *)",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" -H \"Accept: application/json\" \"https://dir.indiamart.com/search4.mp?ss=electrical+contractors&cq=Mumbai\" -o /tmp/indiamart_api_test.html -w \"HTTP %{http_code}, size: %{size_download} bytes, content-type check:\\\\n\")"
+    ]
+  }
+}

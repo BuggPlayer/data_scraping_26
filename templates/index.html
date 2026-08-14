@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead Generator</title>
+<style>
+  :root { --primary: #2d89ef; --bg: #f4f7fc; --card: white; --border: #e2e8f0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 40px 20px; }
+  .container { max-width: 760px; width: 100%; }
+  .card { background: var(--card); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); padding: 30px; margin-bottom: 20px; }
+  .topnav { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  .topnav a { color: var(--primary); font-weight: 600; text-decoration: none; }
+  h1 { color: #1e293b; font-size: 1.8rem; margin-bottom: 8px; }
+  h2 { color: #1e293b; font-size: 1.05rem; margin: 22px 0 10px; }
+  p.sub { color: #64748b; margin-bottom: 20px; }
+  label { font-weight: 600; display: block; margin: 12px 0 6px; color: #334155; }
+  input[type=text], textarea, select { width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 1rem; }
+  .check-grid { display: flex; flex-direction: column; gap: 8px; }
+  .check-row { display: flex; align-items: flex-start; gap: 8px; font-weight: 500; color: #334155; font-size: 0.92rem; }
+  .check-row input { width: auto; margin-top: 3px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .checkbox-row input { width: auto; }
+  .btn { background: var(--primary); color: white; border: none; padding: 12px 28px; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 20px; width: 100%; }
+  .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+  .progress-bar { height: 12px; background: var(--border); border-radius: 10px; overflow: hidden; margin: 16px 0 8px; display:none; }
+  .progress-fill { height: 100%; width: 0%; background: var(--primary); }
+  .status-message { font-weight: 500; color: #475569; }
+  .exports a { display: inline-block; margin: 4px 8px 4px 0; padding: 8px 16px; background: #059669; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; }
+  .error { color: #dc2626; background: #fee2e2; padding: 10px; border-radius: 8px; display:none; margin-top:10px; }
+  .estimate { background: #f1f5f9; border-radius: 12px; padding: 16px; margin-top: 18px; font-size: 0.92rem; color: #334155; }
+  .estimate.over-cap { background: #fee2e2; color: #b91c1c; }
+  .estimate .row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .estimate .note { color: #64748b; font-size: 0.8rem; margin-top: 8px; }
+
+  .country-block { border: 2px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .country-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-weight: 600; color: #334155; background: #f8fafc; }
+  .country-header input { width: auto; }
+  .country-block details { border-top: 1px solid var(--border); }
+  .country-block summary { padding: 8px 14px; cursor: pointer; color: var(--primary); font-size: 0.85rem; font-weight: 600; list-style: none; }
+  .country-block summary::-webkit-details-marker { display: none; }
+  .city-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 4px 10px; padding: 4px 14px 12px; }
+  .city-row { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #475569; font-weight: 400; }
+  .city-row input { width: auto; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="topnav"><a href="/leads">Open Leads Dashboard →</a></div>
+
+  <div class="card">
+    <h1>Lead Generator</h1>
+    <p class="sub">Scrapes Google Places and/or OpenStreetMap (free) across the categories and cities you pick, guesses emails from company websites, and saves to a local database (dedup'd across runs).</p>
+
+    <h2>1. Data source</h2>
+    <div class="check-grid" id="source-checks">
+      <label class="check-row"><input type="checkbox" class="source-check" value="google" checked> Google Places <span style="color:#64748b; font-weight:400;">(ratings/reviews included, costs money past the free monthly quota)</span></label>
+      <label class="check-row"><input type="checkbox" class="source-check" value="osm"> OpenStreetMap <span style="color:#64748b; font-weight:400;">(free, no quota, no ratings/reviews, coverage varies by region)</span></label>
+      <label class="check-row"><input type="checkbox" class="source-check" value="indiamart"> IndiaMART <span style="color:#64748b; font-weight:400;">(free, India-only wholesale/manufacturing suppliers by product keyword — not business type. No phone numbers; needs Playwright installed.)</span></label>
+    </div>
+
+    <h2>2. Who are you targeting?</h2>
+    <div class="check-grid" id="group-checks">
+      {% for key, group in category_groups.items() %}
+      <label class="check-row"><input type="checkbox" class="group-check" value="{{key}}"> {{ group.label }}</label>
+      {% endfor %}
+    </div>
+
+    <label>Legacy preset (optional, adds to the above)</label>
+    <select id="legacy_preset">
+      <option value="">None</option>
+      {% for key in legacy_presets.keys() %}
+      <option value="{{key}}">{{key}}</option>
+      {% endfor %}
+    </select>
+
+    <label>Extra custom categories (one per line, added on top)</label>
+    <textarea id="custom_categories" rows="2" placeholder="e.g. Wedding planner"></textarea>
+    <p class="sub" id="indiamart-category-note" style="display:none; margin-top:6px;">IndiaMART searches by <strong>product keyword</strong>, not business type — put product names here instead (e.g. "stainless steel wire", "cotton yarn"). Business-type categories like "Electrician" will return nothing on IndiaMART.</p>
+
+    <h2>3. Where?</h2>
+    <p class="sub" style="margin-bottom:10px;">Check a country to select all its cities, or expand it to pick specific ones.</p>
+    {% for country, cities in country_cities.items() %}
+    <div class="country-block" data-country="{{country}}">
+      <label class="country-header">
+        <input type="checkbox" class="country-check" data-country="{{country}}"> {{ country }} ({{ cities|length }} major cities)
+      </label>
+      <details>
+        <summary>Select specific cities</summary>
+        <div class="city-grid">
+          {% for city, region in cities %}
+          <label class="city-row"><input type="checkbox" class="city-check" data-country="{{country}}" value="{{city}}"> {{ city }}</label>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+    {% endfor %}
+
+    <label>Extra custom locations (one per line, e.g. "Mira Road, Maharashtra, India")</label>
+    <textarea id="custom_locations" rows="2"></textarea>
+
+    <h2>4. How many leads?</h2>
+    <label>Max leads for this run <span style="font-weight:400; color:#64748b;">(Google Places only — OpenStreetMap and IndiaMART are free and always collect everything found)</span></label>
+    <select id="max_leads">
+      <option value="50">50</option>
+      <option value="100" selected>100</option>
+      <option value="150">150</option>
+      <option value="200">200</option>
+      <option value="500">500</option>
+      <option value="">No limit (only the safety cap below applies)</option>
+    </select>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="find_emails" checked>
+      <label style="margin:0" for="find_emails">Attempt to find emails from company websites (slower)</label>
+    </div>
+
+    <div class="estimate" id="estimate-box">
+      Pick at least one category and one location to see an estimate.
+    </div>
+
+    <button id="start-btn" class="btn" onclick="startScraping()" disabled>Start Scraping</button>
+
+    <div class="progress-bar" id="progress-box"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="status-message" id="status-message"></div>
+    <div class="error" id="error-box"></div>
+  </div>
+
+  <div class="card exports">
+    <h1 style="font-size:1.3rem">Export</h1>
+    <p class="sub">Pulls everything currently saved (excludes anything flagged do-not-contact). Or use the <a href="/leads">Leads Dashboard</a> to browse, call, and email leads directly.</p>
+    <a href="/export/calls">Call list (has phone)</a>
+    <a href="/export/emails">Email list (has email)</a>
+    <a href="/export/all">All leads</a>
+  </div>
+</div>
+
+<script>
+  let lastEstimate = null;
+  let estimateTimer = null;
+
+  function gatherPayload() {
+    const sources = Array.from(document.querySelectorAll('.source-check:checked')).map(el => el.value);
+    const group_keys = Array.from(document.querySelectorAll('.group-check:checked')).map(el => el.value);
+    const selected_cities = Array.from(document.querySelectorAll('.city-check:checked')).map(el => ({ country: el.dataset.country, city: el.value }));
+    const legacy_preset = document.getElementById('legacy_preset').value;
+    const custom_categories = document.getElementById('custom_categories').value.split('\n').map(s => s.trim()).filter(Boolean);
+    const custom_locations = document.getElementById('custom_locations').value.split('\n').map(s => s.trim()).filter(Boolean);
+    const find_emails = document.getElementById('find_emails').checked;
+    const max_leads = document.getElementById('max_leads').value;
+    return { sources, group_keys, selected_cities, legacy_preset, custom_categories, custom_locations, find_emails, max_leads };
+  }
+
+  // Country checkbox <-> its city checkboxes stay in sync both ways:
+  // checking the country checks every city; checking/unchecking a city
+  // updates the country checkbox to checked/indeterminate/unchecked.
+  document.querySelectorAll('.country-check').forEach(countryEl => {
+    countryEl.addEventListener('change', () => {
+      const country = countryEl.dataset.country;
+      document.querySelectorAll(`.city-check[data-country="${country}"]`).forEach(cityEl => {
+        cityEl.checked = countryEl.checked;
+      });
+      scheduleEstimate();
+    });
+  });
+
+  document.querySelectorAll('.city-check').forEach(cityEl => {
+    cityEl.addEventListener('change', () => {
+      const country = cityEl.dataset.country;
+      const cityBoxes = Array.from(document.querySelectorAll(`.city-check[data-country="${country}"]`));
+      const checkedCount = cityBoxes.filter(el => el.checked).length;
+      const countryEl = document.querySelector(`.country-check[data-country="${country}"]`);
+      countryEl.checked = checkedCount === cityBoxes.length;
+      countryEl.indeterminate = checkedCount > 0 && checkedCount < cityBoxes.length;
+      scheduleEstimate();
+    });
+  });
+
+  function scheduleEstimate() {
+    clearTimeout(estimateTimer);
+    estimateTimer = setTimeout(updateEstimate, 300);
+  }
+
+  async function updateEstimate() {
+    const payload = gatherPayload();
+    const box = document.getElementById('estimate-box');
+    const startBtn = document.getElementById('start-btn');
+
+    if (payload.sources.length === 0) {
+      box.className = 'estimate';
+      box.textContent = 'Pick at least one data source.';
+      startBtn.disabled = true;
+      lastEstimate = null;
+      return;
+    }
+    if (payload.group_keys.length === 0 && !payload.legacy_preset && payload.custom_categories.length === 0) {
+      box.className = 'estimate';
+      box.textContent = 'Pick at least one category and one location to see an estimate.';
+      startBtn.disabled = true;
+      lastEstimate = null;
+      return;
+    }
+    if (payload.selected_cities.length === 0 && payload.custom_locations.length === 0) {
+      box.className = 'estimate';
+      box.textContent = 'Pick at least one city (or check a whole country) or a custom location to see an estimate.';
+      startBtn.disabled = true;
+      lastEstimate = null;
+      return;
+    }
+
+    const res = await fetch('/estimate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const est = await res.json();
+    lastEstimate = est;
+
+    const quotaRow = est.quota
+      ? `<div class="row"><span>Free Google quota left this month (${est.quota.month})</span><strong>${est.quota.text_search_free_remaining.toLocaleString()} searches, ${est.quota.details_free_remaining.toLocaleString()} details</strong></div>`
+      : '';
+    const costLabel = est.sources.includes('google') ? 'Estimated Google API cost' : 'Estimated cost';
+
+    const maxLeadsRow = payload.max_leads
+      ? `<div class="row"><span>Max leads this run</span><strong>${payload.max_leads}</strong></div>`
+      : '';
+
+    box.className = 'estimate' + (est.within_cap ? '' : ' over-cap');
+    box.innerHTML = `
+      <div class="row"><span>Categories x Locations</span><strong>${est.categories} x ${est.locations} = ${est.total_queries} searches</strong></div>
+      <div class="row"><span>Safety cap</span><strong>${est.max_queries_allowed}${est.within_cap ? '' : ' — OVER CAP, narrow scope or raise MAX_QUERIES_PER_RUN in .env'}</strong></div>
+      ${maxLeadsRow}
+      <div class="row"><span>Estimated businesses found</span><strong>${est.estimated_businesses_low}–${est.estimated_businesses_high}</strong></div>
+      ${quotaRow}
+      <div class="row"><span>${costLabel}</span><strong>$${est.estimated_cost_low}–$${est.estimated_cost_high}</strong></div>
+      <div class="note">${est.note}</div>
+    `;
+    startBtn.disabled = !est.within_cap;
+  }
+
+  document.querySelectorAll('.source-check, .group-check').forEach(el => el.addEventListener('change', scheduleEstimate));
+  document.getElementById('legacy_preset').addEventListener('change', scheduleEstimate);
+  document.getElementById('custom_categories').addEventListener('input', scheduleEstimate);
+  document.getElementById('custom_locations').addEventListener('input', scheduleEstimate);
+  document.getElementById('max_leads').addEventListener('change', scheduleEstimate);
+
+  function updateIndiamartNote() {
+    const checked = document.querySelector('.source-check[value="indiamart"]').checked;
+    document.getElementById('indiamart-category-note').style.display = checked ? 'block' : 'none';
+  }
+  document.querySelector('.source-check[value="indiamart"]').addEventListener('change', updateIndiamartNote);
+
+  let polling = null;
+  async function startScraping() {
+    const payload = gatherPayload();
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('progress-box').style.display = 'block';
+    document.getElementById('error-box').style.display = 'none';
+
+    try {
+      const res = await fetch('/start', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed'); }
+      polling = setInterval(checkProgress, 1000);
+    } catch (e) {
+      document.getElementById('error-box').style.display = 'block';
+      document.getElementById('error-box').textContent = e.message;
+      document.getElementById('start-btn').disabled = !(lastEstimate && lastEstimate.within_cap);
+    }
+  }
+
+  async function checkProgress() {
+    const res = await fetch('/progress');
+    const data = await res.json();
+    document.getElementById('progress-fill').style.width = data.percent + '%';
+    document.getElementById('status-message').textContent = data.message;
+    if (data.status === 'completed' || data.status === 'error') {
+      clearInterval(polling);
+      document.getElementById('start-btn').disabled = !(lastEstimate && lastEstimate.within_cap);
+      if (data.status === 'error') {
+        document.getElementById('error-box').style.display = 'block';
+        document.getElementById('error-box').textContent = data.message;
+      }
+    }
+  }
+</script>
+</body>
+</html>

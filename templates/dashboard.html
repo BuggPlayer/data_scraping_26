@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leads Dashboard</title>
+<style>
+  :root { --primary: #2d89ef; --bg: #f4f7fc; --card: white; --border: #e2e8f0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); padding: 24px; color: #1e293b; }
+  .wrap { max-width: 1400px; margin: 0 auto; }
+  .topnav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .topnav a { color: var(--primary); font-weight: 600; text-decoration: none; }
+  h1 { font-size: 1.6rem; }
+
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stat { background: var(--card); border-radius: 12px; padding: 14px 18px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); min-width: 110px; }
+  .stat .num { font-size: 1.5rem; font-weight: 700; }
+  .stat .label { color: #64748b; font-size: 0.8rem; }
+
+  .toolbar { background: var(--card); border-radius: 12px; padding: 14px 18px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .toolbar input, .toolbar select { padding: 8px 12px; border: 2px solid var(--border); border-radius: 8px; font-size: 0.95rem; }
+  .toolbar input[type="text"] { flex: 1; min-width: 200px; }
+  .toolbar .exports { margin-left: auto; display: flex; gap: 8px; }
+  .toolbar .exports a { padding: 8px 14px; background: #059669; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
+  thead { background: #f1f5f9; }
+  th, td { padding: 10px 12px; text-align: left; font-size: 0.88rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: #475569; font-weight: 600; }
+  tbody tr:hover { background: #f8fafc; }
+  tbody tr.dnc { opacity: 0.5; }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+  .badge-hot { background: #fee2e2; color: #b91c1c; }
+  .badge-warm { background: #fef3c7; color: #92400e; }
+  .badge-cold { background: #e2e8f0; color: #475569; }
+
+  a.contact-link { color: var(--primary); text-decoration: none; font-weight: 600; }
+  a.contact-link:hover { text-decoration: underline; }
+  .muted { color: #94a3b8; }
+
+  select.status-select { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.82rem; }
+  input.notes-input { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.82rem; width: 140px; }
+
+  .empty { text-align: center; padding: 60px 20px; color: #64748b; }
+  .empty a { color: var(--primary); font-weight: 600; }
+
+  .saved-flash { display: inline-block; color: #059669; font-size: 0.75rem; margin-left: 6px; opacity: 0; transition: opacity 0.3s; }
+  .saved-flash.show { opacity: 1; }
+
+  .ai-status { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 5px 12px; border-radius: 999px; font-weight: 600; }
+  .ai-status .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .ai-status.online { background: #dcfce7; color: #166534; }
+  .ai-status.online .dot { background: #22c55e; }
+  .ai-status.offline { background: #f1f5f9; color: #64748b; }
+  .ai-status.offline .dot { background: #94a3b8; }
+
+  .ai-cell { min-width: 220px; max-width: 320px; }
+  .ai-pitch-text { font-size: 0.85rem; color: #334155; font-style: italic; }
+  .ai-btn { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: white; font-size: 0.78rem; font-weight: 600; cursor: pointer; color: var(--primary); }
+  .ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ai-error { color: #dc2626; font-size: 0.78rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav">
+    <h1>Leads Dashboard</h1>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <span class="ai-status offline" id="ai-status"><span class="dot"></span> Checking AI...</span>
+      <a href="/">← Back to Scraper</a>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Search business, locality, category...">
+    <select id="filter-qualification">
+      <option value="">All qualifications</option>
+      <option value="Hot">Hot</option>
+      <option value="Warm">Warm</option>
+      <option value="Cold">Cold</option>
+    </select>
+    <select id="filter-call-status">
+      <option value="">All call statuses</option>
+      <option value="not_called">Not called</option>
+      <option value="attempted">Attempted</option>
+      <option value="connected">Connected</option>
+      <option value="voicemail">Voicemail</option>
+      <option value="no_answer">No answer</option>
+      <option value="wrong_number">Wrong number</option>
+      <option value="callback">Callback requested</option>
+      <option value="converted">Converted</option>
+      <option value="rejected">Rejected</option>
+    </select>
+    <select id="filter-country">
+      <option value="">All countries</option>
+    </select>
+    <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem; color:#475569;">
+      <input type="checkbox" id="hide-dnc" checked> Hide do-not-contact
+    </label>
+    <div class="exports">
+      <a href="/export/calls" id="export-calls">Call list</a>
+      <a href="/export/emails" id="export-emails">Email list</a>
+      <a href="/export/all" id="export-all">All leads</a>
+    </div>
+  </div>
+
+  <div id="table-container"></div>
+</div>
+
+<script>
+let allLeads = [];
+
+const CALL_STATUSES = ["not_called","attempted","connected","voicemail","no_answer","wrong_number","callback","converted","rejected"];
+const EMAIL_STATUSES = ["not_sent","sent","opened","replied","bounced","unsubscribed"];
+
+function label(s) {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+async function loadLeads() {
+  const res = await fetch('/api/leads');
+  allLeads = await res.json();
+  populateCountryFilter();
+  renderStats();
+  renderTable();
+}
+
+function populateCountryFilter() {
+  const select = document.getElementById('filter-country');
+  const current = select.value;
+  const countries = [...new Set(allLeads.map(l => l.country).filter(Boolean))].sort();
+  select.innerHTML = '<option value="">All countries</option>' +
+    countries.map(c => `<option value="${c}">${c}</option>`).join('');
+  select.value = current;
+}
+
+function renderStats() {
+  const total = allLeads.length;
+  const hot = allLeads.filter(l => l.qualification === 'Hot').length;
+  const callable = allLeads.filter(l => l.phone && !l.do_not_contact).length;
+  const emailable = allLeads.filter(l => l.email && !l.do_not_contact).length;
+  const contacted = allLeads.filter(l => l.call_status !== 'not_called' || l.email_status !== 'not_sent').length;
+  const dnc = allLeads.filter(l => l.do_not_contact).length;
+
+  const stats = [
+    ['Total leads', total], ['Hot', hot], ['Ready to call', callable],
+    ['Ready to email', emailable], ['Contacted', contacted], ['Do-not-contact', dnc],
+  ];
+  document.getElementById('stats').innerHTML = stats.map(([label, num]) =>
+    `<div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`
+  ).join('');
+}
+
+function updateExportLinks(country) {
+  const suffix = country ? `?country=${encodeURIComponent(country)}` : '';
+  document.getElementById('export-calls').href = '/export/calls' + suffix;
+  document.getElementById('export-emails').href = '/export/emails' + suffix;
+  document.getElementById('export-all').href = '/export/all' + suffix;
+}
+
+function badgeClass(q) {
+  if (q === 'Hot') return 'badge-hot';
+  if (q === 'Warm') return 'badge-warm';
+  return 'badge-cold';
+}
+
+function renderTable() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const qFilter = document.getElementById('filter-qualification').value;
+  const csFilter = document.getElementById('filter-call-status').value;
+  const countryFilter = document.getElementById('filter-country').value;
+  const hideDnc = document.getElementById('hide-dnc').checked;
+
+  updateExportLinks(countryFilter);
+
+  let rows = allLeads.filter(l => {
+    if (hideDnc && l.do_not_contact) return false;
+    if (qFilter && l.qualification !== qFilter) return false;
+    if (csFilter && l.call_status !== csFilter) return false;
+    if (countryFilter && l.country !== countryFilter) return false;
+    if (search) {
+      const hay = `${l.business_name} ${l.locality} ${l.category}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const container = document.getElementById('table-container');
+  if (allLeads.length === 0) {
+    container.innerHTML = `<div class="empty">No leads yet. <a href="/">Go run a scrape</a> to get started.</div>`;
+    return;
+  }
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="empty">No leads match your filters.</div>`;
+    return;
+  }
+
+  const html = `
+  <table>
+    <thead><tr>
+      <th>Business</th><th>Category / Locality</th><th>Country</th><th>Source</th><th>Phone</th><th>Email</th>
+      <th>AI opener</th><th>Score</th><th>Call status</th><th>Email status</th><th>Notes</th><th>Stop contact</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(rowHtml).join('')}
+    </tbody>
+  </table>`;
+  container.innerHTML = html;
+
+  rows.forEach(l => {
+    const callSel = document.getElementById(`call-${l.id}`);
+    if (callSel) callSel.addEventListener('change', e => updateStatus(l.id, { call_status: e.target.value }, l.id));
+
+    const emailSel = document.getElementById(`email-${l.id}`);
+    if (emailSel) emailSel.addEventListener('change', e => updateStatus(l.id, { email_status: e.target.value }, l.id));
+
+    const notesInput = document.getElementById(`notes-${l.id}`);
+    if (notesInput) notesInput.addEventListener('blur', e => updateStatus(l.id, { call_status: l.call_status, call_notes: e.target.value }, l.id));
+
+    const dncCheckbox = document.getElementById(`dnc-${l.id}`);
+    if (dncCheckbox) dncCheckbox.addEventListener('change', e => {
+      if (e.target.checked) updateStatus(l.id, { do_not_contact: true, reason: 'marked from dashboard' }, l.id);
+    });
+
+    const aiBtn = document.getElementById(`ai-btn-${l.id}`);
+    if (aiBtn) aiBtn.addEventListener('click', () => generatePitch(l.id));
+  });
+}
+
+function rowHtml(l) {
+  const phone = l.phone
+    ? `<a class="contact-link" href="tel:${l.phone}">${l.phone}</a>`
+    : `<span class="muted">—</span>`;
+  const email = l.email
+    ? `<a class="contact-link" href="mailto:${l.email}">${l.email}</a>`
+    : `<span class="muted">—</span>`;
+  const sourceLabel = l.source === 'openstreetmap' ? 'OSM' : (l.source === 'linkedin_manual' ? 'LinkedIn' : 'Google');
+
+  return `
+  <tr class="${l.do_not_contact ? 'dnc' : ''}">
+    <td><strong>${escapeHtml(l.business_name || '')}</strong><br><span class="badge ${badgeClass(l.qualification)}">${l.qualification}</span></td>
+    <td>${escapeHtml(l.category || '')}<br><span class="muted">${escapeHtml(l.locality || '')}</span></td>
+    <td>${escapeHtml(l.country || '')}<br><span class="muted">${escapeHtml(l.region || '')}</span></td>
+    <td><span class="muted">${sourceLabel}</span></td>
+    <td>${phone}</td>
+    <td>${email}</td>
+    <td class="ai-cell" id="ai-cell-${l.id}">${aiCellHtml(l)}</td>
+    <td>${l.lead_score ?? ''}</td>
+    <td>
+      <select class="status-select" id="call-${l.id}">
+        ${CALL_STATUSES.map(s => `<option value="${s}" ${s === l.call_status ? 'selected' : ''}>${label(s)}</option>`).join('')}
+      </select>
+      <span class="saved-flash" id="flash-call-${l.id}">Saved</span>
+    </td>
+    <td>
+      <select class="status-select" id="email-${l.id}">
+        ${EMAIL_STATUSES.map(s => `<option value="${s}" ${s === l.email_status ? 'selected' : ''}>${label(s)}</option>`).join('')}
+      </select>
+    </td>
+    <td><input class="notes-input" id="notes-${l.id}" value="${escapeHtml(l.call_notes || '')}" placeholder="notes..."></td>
+    <td><input type="checkbox" id="dnc-${l.id}" ${l.do_not_contact ? 'checked disabled' : ''}></td>
+  </tr>`;
+}
+
+function aiCellHtml(l) {
+  const btnLabel = l.ai_pitch ? 'Regenerate' : 'Generate opener';
+  return `
+    ${l.ai_pitch ? `<div class="ai-pitch-text">"${escapeHtml(l.ai_pitch)}"</div>` : ''}
+    <button class="ai-btn" id="ai-btn-${l.id}" style="margin-top:4px;">${btnLabel}</button>
+  `;
+}
+
+async function generatePitch(id) {
+  const cell = document.getElementById(`ai-cell-${id}`);
+  cell.innerHTML = `<span class="muted">Generating...</span>`;
+  try {
+    const res = await fetch(`/api/leads/${id}/generate-pitch`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to generate');
+    const local = allLeads.find(l => l.id === id);
+    if (local) local.ai_pitch = data.pitch;
+    cell.innerHTML = aiCellHtml(local);
+    document.getElementById(`ai-btn-${id}`).addEventListener('click', () => generatePitch(id));
+  } catch (e) {
+    cell.innerHTML = `<div class="ai-error">${escapeHtml(e.message)}</div><button class="ai-btn" id="ai-btn-${id}" style="margin-top:4px;">Retry</button>`;
+    document.getElementById(`ai-btn-${id}`).addEventListener('click', () => generatePitch(id));
+  }
+}
+
+async function checkAiStatus() {
+  const pill = document.getElementById('ai-status');
+  try {
+    const res = await fetch('/api/ai/status');
+    const data = await res.json();
+    if (data.available) {
+      pill.className = 'ai-status online';
+      pill.innerHTML = `<span class="dot"></span> AI ready (${data.model})`;
+    } else {
+      pill.className = 'ai-status offline';
+      pill.innerHTML = `<span class="dot"></span> AI offline — run 'ollama serve'`;
+    }
+  } catch (e) {
+    pill.className = 'ai-status offline';
+    pill.innerHTML = `<span class="dot"></span> AI status unknown`;
+  }
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+async function updateStatus(id, payload) {
+  await fetch(`/api/leads/${id}/status`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const local = allLeads.find(l => l.id === id);
+  if (local) Object.assign(local, payload);
+  const flash = document.getElementById(`flash-call-${id}`);
+  if (flash) { flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 1200); }
+  if (payload.do_not_contact) loadLeads();
+}
+
+document.getElementById('search').addEventListener('input', renderTable);
+document.getElementById('filter-qualification').addEventListener('change', renderTable);
+document.getElementById('filter-call-status').addEventListener('change', renderTable);
+document.getElementById('filter-country').addEventListener('change', renderTable);
+document.getElementById('hide-dnc').addEventListener('change', renderTable);
+
+loadLeads();
+checkAiStatus();
+</script>
+</body>
+</html>

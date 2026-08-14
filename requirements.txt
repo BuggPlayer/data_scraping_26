@@ -1,0 +1,9 @@
+flask
+flask-cors
+pandas
+requests
+openpyxl
+python-dotenv
+beautifulsoup4
+lxml
+playwright
